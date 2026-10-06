@@ -221,6 +221,7 @@ class _FakeOpenRouterResponse:
             "data": [
                 {"id": "z-ai/glm-5.3", "architecture": {"input_modalities": ["text"]}},
                 {"id": "openai/gpt-5", "architecture": {"input_modalities": ["text", "image"]}},
+                {"id": "acme/no-architecture"},
             ]
         }
 
@@ -243,6 +244,14 @@ def test_openrouter_image_support_follows_input_modalities(openrouter_models: li
     assert model_supports_images("openrouter/z-ai/glm-5.3") is False
     assert model_supports_images("litellm/openrouter/openai/gpt-5") is True
     assert len(openrouter_models) == 1
+
+
+@pytest.mark.usefixtures("openrouter_models")
+def test_openrouter_entry_without_architecture_is_skipped() -> None:
+    assert models._openrouter_input_modalities() == {
+        "z-ai/glm-5.3": ["text"],
+        "openai/gpt-5": ["text", "image"],
+    }
 
 
 @pytest.mark.usefixtures("openrouter_models")

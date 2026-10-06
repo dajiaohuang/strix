@@ -917,8 +917,9 @@ def _openrouter_input_modalities() -> dict[str, list[str]] | None:
         response = requests.get(_OPENROUTER_MODELS_URL, timeout=5)
         response.raise_for_status()
         return {
-            model["id"].lower(): model["architecture"]["input_modalities"]
+            model["id"].lower(): modalities
             for model in response.json()["data"]
+            if (modalities := (model.get("architecture") or {}).get("input_modalities")) is not None
         }
     except Exception:  # noqa: BLE001
         logger.warning("Could not fetch OpenRouter model modalities", exc_info=True)
