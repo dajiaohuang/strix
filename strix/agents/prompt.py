@@ -32,6 +32,10 @@ extraction.
 """
 
 
+def without_screenshot_steps(skill_body: str) -> str:
+    return _SCREENSHOT_SECTION_RE.sub(_TEXT_ONLY_SCREENSHOT_SECTION, skill_body, count=1)
+
+
 def _resolve_skills(
     *,
     requested: list[str] | None,
@@ -133,8 +137,8 @@ def render_system_prompt(
         )
         skill_content = load_skills(skills_to_load)
         if not supports_images and "agent_browser" in skill_content:
-            skill_content["agent_browser"] = _SCREENSHOT_SECTION_RE.sub(
-                _TEXT_ONLY_SCREENSHOT_SECTION, skill_content["agent_browser"], count=1
+            skill_content["agent_browser"] = without_screenshot_steps(
+                skill_content["agent_browser"]
             )
         env.globals["get_skill"] = lambda name: skill_content.get(name, "")
 

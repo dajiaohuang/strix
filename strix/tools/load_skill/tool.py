@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from agents import RunContextWrapper, function_tool
 
+from strix.agents.prompt import without_screenshot_steps
 from strix.skills import load_skills, validate_requested_skills
 
 
@@ -24,7 +25,6 @@ async def load_skill(ctx: RunContextWrapper, skills: list[str]) -> str:
             Max 5. Names match the bare files under
             ``strix/skills/<category>/<name>.md``.
     """
-    del ctx
     requested = list(skills or [])
     err = validate_requested_skills(requested)
     if err:
@@ -32,5 +32,7 @@ async def load_skill(ctx: RunContextWrapper, skills: list[str]) -> str:
     contents = load_skills(requested)
     if not contents:
         return "load_skill: no content loaded for requested skills."
+    if isinstance(ctx.context, dict) and ctx.context.get("supports_images") is False:
+        contents = {name: without_screenshot_steps(body) for name, body in contents.items()}
     sections = [f"## Skill: {name}\n\n{body}" for name, body in contents.items()]
     return "\n\n---\n\n".join(sections)
