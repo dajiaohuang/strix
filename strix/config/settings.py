@@ -72,6 +72,7 @@ class LlmSettings(BaseSettings):
         default=False,
         alias="STRIX_OPENROUTER_STICKY_SESSIONS",
     )
+    provider_bans: bool = Field(default=True, alias="STRIX_PROVIDER_BANS")
     disable_streaming: bool = Field(
         default=False,
         alias="LLM_DISABLE_STREAMING",
