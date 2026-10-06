@@ -109,6 +109,10 @@ class LlmRequestEvent:
     # Streamed calls only.
     time_to_first_token_ms: int | None = None
     finish_reason: str | None = None
+    # Gateway routes (OpenRouter) only: the provider that served the attempt
+    # and the gateway's class for its error (e.g. ``provider_unavailable``).
+    upstream_provider: str | None = None
+    upstream_error_type: str | None = None
     # Every response header the provider sent, name-normalized, values capped.
     response_headers: dict[str, str] | None = None
     # Free-form: request parameters, full usage object, SDK hidden params,
@@ -159,9 +163,22 @@ class HttpReply:
 
     status_code: int | None = None
     headers: dict[str, str] | None = None
+    upstream_provider: str | None = None
+    upstream_error_type: str | None = None
 
 
 _http_reply: ContextVar[HttpReply | None] = ContextVar("strix_llm_http_reply", default=None)
+
+
+def record_upstream(provider: object, error_type: object = None) -> None:
+    """Remember which provider behind a gateway served the attempt in flight."""
+    reply = _http_reply.get()
+    if reply is None:
+        return
+    if isinstance(provider, str) and provider:
+        reply.upstream_provider = provider
+    if isinstance(error_type, str) and error_type:
+        reply.upstream_error_type = error_type
 
 
 async def record_http_reply(response: Response) -> None:
@@ -682,6 +699,7 @@ def event_from_litellm(
             ttft_ms = max(0, int((first_at - started).total_seconds() * 1000))
 
     context = current_call_context()
+    reply = _http_reply.get() or HttpReply()
     base = LlmRequestEvent(
         call_id=call_id,
         route="litellm",
@@ -703,6 +721,8 @@ def event_from_litellm(
         retry_attempt=context.retry_attempt,
         request_bytes=json_size(_litellm_request_body(kwargs)),
         time_to_first_token_ms=ttft_ms,
+        upstream_provider=reply.upstream_provider,
+        upstream_error_type=reply.upstream_error_type,
         response_headers=headers_from_response(reply_headers),
     )
     if outcome == "success":
@@ -897,12 +917,14 @@ def _log_line_sink(event: LlmRequestEvent) -> None:
     level = logging.DEBUG if event.outcome == "success" else logging.WARNING
     logger.log(
         level,
-        "llm_request route=%s provider=%s model=%s host=%s outcome=%s status=%s "
-        "request_id=%s response_id=%s stream=%s duration_ms=%d ttft_ms=%s "
+        "llm_request route=%s provider=%s upstream=%s upstream_error=%s model=%s host=%s "
+        "outcome=%s status=%s request_id=%s response_id=%s stream=%s duration_ms=%d ttft_ms=%s "
         "req_bytes=%s res_bytes=%s finish=%s "
         "in=%s out=%s cached=%s cost=%s agent=%s attempt=%d%s",
         event.route,
         event.provider or "-",
+        event.upstream_provider or "-",
+        event.upstream_error_type or "-",
         event.model,
         event.api_host or "-",
         event.outcome,
@@ -1049,6 +1071,8 @@ class RequestLoggingModel(Model):
             request_bytes=request.size,
             time_to_first_token_ms=ttft_ms,
             finish_reason=finish_reason,
+            upstream_provider=reply.upstream_provider,
+            upstream_error_type=reply.upstream_error_type,
             response_headers=headers_from_response(reply.headers),
         )
         if exc is None:
